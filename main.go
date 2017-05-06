@@ -23,11 +23,15 @@ type (
 		setRoute(*route)
 
 		payload() *payload
+		setPayload(*payload)
+
+		getFile(string) *file
+		setFile(string, *file)
 
 		fetchFile(string) error
-		write(http.ResponseWriter, *http.Request)
+		write(http.ResponseWriter, *http.Request, string)
 
-		longPoll() error
+		poll(string) error
 	}
 
 	route struct {
@@ -35,11 +39,16 @@ type (
 		Endpoint string `json:"endpoint" yaml:"endpoint"`
 	}
 
+	file struct {
+		name        string
+		data        []byte
+		entry       *dropbox.Entry
+		notFound    bool
+		lastFetched time.Time
+	}
+
 	payload struct {
-		data         []byte
-		lastFetch    time.Time
 		lastModified time.Time
-		notFound     bool
 	}
 )
 
@@ -52,6 +61,7 @@ var (
 	endpointPtr = flag.String("endpoint", "/", "Endpoint to serve content at.")
 	pathPtr     = flag.String("path", "", "Dropbox path to serve content from.")
 	portPtr     = flag.Int("port", 3030, "Server port.")
+	refreshPtr  = flag.Bool("refresh-on-dir-change", true, "Refresh on directory change. The alternate (when false) is to only refresh a file when the file itself changes.")
 	servicePtr  = flag.String("service", "", "Service to be used (\"dropbox\" or \"drive\").")
 	sleepPtr    = flag.Int("sleep", 0, "Time to wait between polls (in seconds).")
 )
@@ -72,9 +82,9 @@ func readConfig(configFile string, dest *[]route) error {
 	return nil
 }
 
-func startLongPoll(s service) {
+func startPoll(s service) {
 	for {
-		if err := s.longPoll(); err != nil {
+		if err := s.poll(s.route().Path); err != nil {
 			log.Println(err)
 			time.Sleep(time.Minute)
 		}
@@ -85,11 +95,15 @@ func makeHandler(s service) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := filepath.Join(s.route().Path, r.URL.Path)
 
+		if s.getFile(key) == nil {
+			s.setFile(key, &file{})
+		}
+
 		v, found := c.Get(key)
 		if found {
 			s.setRoute(v.(*route))
-			if !s.payload().lastFetch.Before(s.payload().lastModified) {
-				s.write(w, r)
+			if !s.getFile(key).lastFetched.Before(s.payload().lastModified) {
+				s.write(w, r, key)
 				return
 			}
 		}
@@ -98,7 +112,7 @@ func makeHandler(s service) func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		s.write(w, r)
+		s.write(w, r, key)
 	}
 }
 
@@ -127,13 +141,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := &http.Server{
-		Addr:           fmt.Sprintf(":%d", *portPtr),
-		ReadTimeout:    time.Second * 30,
-		WriteTimeout:   time.Second * 30,
-		MaxHeaderBytes: 1 << 20,
-	}
-
 	switch *servicePtr {
 	case "dropbox":
 		initDropbox()
@@ -145,5 +152,5 @@ func main() {
 	}
 
 	log.Printf("Listening on port %d.", *portPtr)
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *portPtr), nil))
 }

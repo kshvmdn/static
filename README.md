@@ -62,6 +62,8 @@ Example:
           Dropbox path to serve content from.
       -port int
           Server port. (default 3030)
+      -refresh-on-dir-change
+          Refresh on directory change. The alternate (when false) is to only refresh a file when the file itself changes. (default true)
       -service string
           Service to be used ("dropbox" or "drive").
       -sleep int
@@ -121,4 +123,4 @@ Prior to submitting work, please ensure your changes comply with [Golint](https:
 #### TODO
 
   - [ ] Add Google Drive integration, refer to [this](https://developers.google.com/drive/v3/web/quickstart/go) to get started. Requires OAuth2, might be worth it to use OAuth2 for Dropbox as well to be consistent.
-  - [ ] Rework the long poll model. Currently polls each directory path (not file!), which means **every** file in a given path polls the same root directory. This can be fixed by starting the polling when a file is first accessed (since that's when the associated key is created). We'll just need to track which keys are being polled, which shouldn't be a problem.
+  - [x] Rework the long poll model. Currently polls each directory path (not file!), which means **every** file in a given path polls the same root directory. This can be fixed by starting the polling when a file is first accessed (since that's when the associated key is created). We'll just need to track which keys are being polled, which shouldn't be a problem.
