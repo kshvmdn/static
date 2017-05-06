@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -110,6 +111,7 @@ func (d *dropboxRoute) longPoll() error {
 	}
 
 	d.Payload.lastModified = time.Now()
-	time.Sleep(time.Second*time.Duration(*sleepPtr) + time.Second*time.Duration(dp.Backoff))
+	max := math.Max(float64(*sleepPtr), float64(dp.Backoff))
+	time.Sleep(time.Second * time.Duration(max))
 	return nil
 }
